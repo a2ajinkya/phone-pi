@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# ingest-text: Parse a document to plain text (fast, light)
+# Usage: ingest-text <file> [pages]
+#   pages: optional page range like "1-5,10,15-20"
+# Output: plain text to stdout
+
+set -euo pipefail
+
+FILE="${1:?Usage: ingest-text <file> [pages]}"
+PAGES="${2:-}"
+
+if [ ! -f "$FILE" ]; then
+  echo "Error: file not found: $FILE" >&2
+  exit 1
+fi
+
+CMD=(lit parse "$FILE" --format text -q)
+
+if [ -n "$PAGES" ]; then
+  CMD+=(--target-pages "$PAGES")
+fi
+
+exec "${CMD[@]}"

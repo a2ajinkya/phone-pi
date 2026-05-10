@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# ingest-info: Quick summary of a document
+# Usage: ingest-info <file>
+# Output: file info + preview of first page text
+
+set -euo pipefail
+
+FILE="${1:?Usage: ingest-info <file>}"
+
+if [ ! -f "$FILE" ]; then
+  echo "Error: file not found: $FILE" >&2
+  exit 1
+fi
+
+SIZE=$(du -h "$FILE" | cut -f1)
+MIME=$(file --mime-type -b "$FILE" 2>/dev/null || echo "unknown")
+
+echo "File:   $FILE"
+echo "Size:   $SIZE"
+echo "Type:   $MIME"
+echo ""
+
+# Parse first page to show text preview
+case "$MIME" in
+  application/pdf|application/vnd.openxmlformats-officedocument.*|application/msword|application/vnd.ms-*)
+    TEXT=$(lit parse "$FILE" --format text --target-pages "1" -q 2>/dev/null || true)
+    if [ -n "$TEXT" ]; then
+      LINES=$(echo "$TEXT" | wc -l)
+      echo "=== Preview (first page, $LINES lines) ==="
+      echo "$TEXT" | head -c 400
+      echo ""
+    fi
+    ;;
+  *)
+    echo "(file type may not be supported by LiteParse — try ingest-parse)"
+    ;;
+esac

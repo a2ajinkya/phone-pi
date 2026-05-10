@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# ingest-batch: Parse all documents in a directory to JSON
+# Usage: ingest-batch <input-dir> [output-dir]
+#   output-dir: defaults to <input-dir>-parsed
+# Extracts: PDF, DOCX, PPTX, XLSX, images (anything lit supports)
+# Recursive by default
+
+set -euo pipefail
+
+INPUT_DIR="${1:?Usage: ingest-batch <input-dir> [output-dir]}"
+OUTPUT_DIR="${2:-"${INPUT_DIR%/}-parsed"}"
+
+if [ ! -d "$INPUT_DIR" ]; then
+  echo "Error: input directory not found: $INPUT_DIR" >&2
+  exit 1
+fi
+
+mkdir -p "$OUTPUT_DIR"
+
+echo "Parsing all docs in: $INPUT_DIR" >&2
+echo "Output to: $OUTPUT_DIR" >&2
+
+exec lit batch-parse "$INPUT_DIR" "$OUTPUT_DIR" --format json --recursive -q

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# ingest-screenshot: Screenshot pages from a document
+# Usage: ingest-screenshot <file> [pages] [-d <output-dir>]
+#   pages: optional page range like "1-5,10,15-20"
+#   -d: output directory (default: ./screenshots-<basename>)
+# Output: saves PNG files to output directory, prints paths to stdout
+
+set -euo pipefail
+
+FILE="${1:?Usage: ingest-screenshot <file> [pages] [-d <dir>]}"
+PAGES="${2:-}"
+
+# Parse optional -d flag
+OUTDIR="./screenshots-$(basename "$FILE" | sed 's/\.[^.]*$//')"
+
+# Check if the next argument after optional pages is -d
+# We handle: ingest-screenshot file.pdf "1-5" -d ./shots
+#       or:  ingest-screenshot file.pdf -d ./shots
+shift
+if [ "${1:-}" = "-d" ]; then
+  shift
+  OUTDIR="${1:?Missing output directory after -d}"
+elif [ -n "${1:-}" ] && [ "${1:-}" != "-d" ]; then
+  # It was the pages argument, check next for -d
+  PAGES="$1"
+  shift
+  if [ "${1:-}" = "-d" ]; then
+    shift
+    OUTDIR="${1:?Missing output directory after -d}"
+  fi
+fi
+
+if [ ! -f "$FILE" ]; then
+  echo "Error: file not found: $FILE" >&2
+  exit 1
+fi
+
+CMD=(lit screenshot "$FILE" -o "$OUTDIR" -q)
+
+if [ -n "$PAGES" ]; then
+  CMD+=(--target-pages "$PAGES")
+fi
+
+# Run and show paths
+"${CMD[@]}" >&2
+
+# List generated files
+find "$OUTDIR" -name '*.png' -type f | sort
