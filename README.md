@@ -15,46 +15,17 @@ Bridges the gap between a terminal-based AI coding assistant and the mobile envi
 | **Collapsed output** — clean tool rendering, press Ctrl+O to expand | [`collapsed-tools.ts`](extensions/collapsed-tools.ts) | — |
 | **Web search & research** — Tavily CLI integration for search, extract, crawl, deep research | — | 8 [`tavily-*`](skills/) skills |
 
-## How to use
-
-### Prerequisites
-
-- [pi coding agent](https://github.com/earendil-works/pi-coding-agent) installed globally:
-  ```bash
-  npm install -g @earendil-works/pi-coding-agent
-  ```
-- Termux on Android (with [Termux:API](https://wiki.termux.com/wiki/Termux:API) for input/speech features)
-
-### Quick start
+## Use
 
 ```bash
-# Clone into your pi agent directory (or symlink individual files)
-git clone https://github.com/a2ajinkya/phone-pi.git ~/phone-pi
-
-# Symlink the extensions
-ln -s ~/phone-pi/extensions/*.ts ~/.pi/agent/extensions/
-
-# Symlink the skills
-for d in ~/phone-pi/skills/*/; do
-  ln -s "$d" ~/.pi/agent/skills/
-done
+git clone https://github.com/a2ajinkya/phone-pi.git
+cd phone-pi
+pi --agent-dir .
 ```
 
-### Dependencies by skill
+Or symlink the pieces you want into `~/.pi/agent/`.
 
-| Skill | Requires |
-|-------|----------|
-| `tavily-*` | [Tavily CLI](https://github.com/tavily-ai/cli) (`curl -fsSL https://cli.tavily.com/install.sh \| bash`) + a Tavily API key |
-| `liteparse-ingest` | [LiteParse](https://github.com/run-llama/liteparse) (`npm install -g liteparse`) |
-| `docorg` | SQLite3, a Python backend at `~/storage/code/docorg/` |
-| `termux-input` | `pkg install termux-api` |
-
-### Config
-
-- [`settings.json`](settings.json) — Provider/model defaults (no API keys included)
-- Create your own `~/.pi/agent/auth.json` with your API keys
-
-> **Note**: `auth.json` (API keys/secrets) and `sessions/` (conversation history) are **not** included in this repo.
+Dependencies vary by skill — check individual skill files for details.
 
 ## Skill index
 
