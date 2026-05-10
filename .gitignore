@@ -1,0 +1,9 @@
+# API keys and credentials
+auth.json
+
+# Session data (personal conversations)
+sessions/
+
+# OS files
+.DS_Store
+Thumbs.db
