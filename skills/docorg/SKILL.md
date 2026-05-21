@@ -10,6 +10,7 @@ Organizes downloaded PDFs, DOCX, PPTX into searchable filenames.
 ## Database
 - Path: `~/storage/code/docorg/docorg.db`
 - Schema: `files`, `dossiers`, `names`, `rename_log`
+- 441 files scanned, ~418 pending naming
 
 ## User Workflow (one command)
 

@@ -13,7 +13,7 @@ allowed-tools: Bash(lit, liteparse, ingest-*)
 
 Document ingestion via [LiteParse](https://github.com/run-llama/liteparse) — fast, local PDF parsing with spatial text, OCR, and bounding boxes.
 
-Globally installed via npm: `@llamaindex/liteparse` (binary: `lit`).
+Globally installed: `lit` / `liteparse` v1.5.3.
 
 ## Decision tree
 
@@ -21,93 +21,57 @@ Globally installed via npm: `@llamaindex/liteparse` (binary: `lit`).
 User points at a document file
 │
 ├─ Single file?
-│  ├─ Want structured text with positions?   → ingest-parse <file> [pages]
-│  ├─ Just want plain text, fast?             → ingest-text <file> [pages]
-│  ├─ Want to see pages visually?             → ingest-screenshot <file> [pages] [-d <dir>]
-│  │
-│  └─ Remote URL? (doesn't work with CLI!)   → curl -sLO URL && ingest-parse <downloaded-file>
+│  ├─ PDF with selectable text?         → lit parse file --format json -q
+│  ├─ PDF with no text (scanned/image)? → lit parse file --format json -q  (OCR auto-kicks in)
+│  ├─ Office doc (DOCX/XLSX/PPTX)?      → lit parse file --format json -q  (auto-converts via LibreOffice)
+│  ├─ Image (PNG/JPG/etc)?              → lit parse file --format json -q  (auto-converts via ImageMagick + OCR)
+│  └─ Remote URL?                       → curl -sL URL | lit parse - --format json -q
 │
-├─ Multiple files in a directory?           → ingest-batch <input-dir> [output-dir]
+├─ Multiple files in a directory?       → ingest-batch <input-dir> <output-dir>
 │
-└─ User wants a quick summary of the doc?     → ingest-info <file>
+├─ User wants page screenshots?         → lit screenshot file -o ./screenshots
+│
+├─ User wants visual citations?         → ingest-cite <file> <phrase>
+│  (find phrase + screenshot + highlight)
+│
+└─ Just want plain text?                → lit parse file --format text -q
 ```
 
 ## Quick reference
 
 ```bash
-# ★★★ Primary workflows ★★★
-
-# Parse an entire document to JSON (structured text + bounding boxes)
-ingest-parse report.pdf
-
-# Parse only specific pages
-ingest-parse report.pdf 1-5,10,15-20
-
-# Get just the plain text (faster, lighter)
-ingest-text report.pdf
-ingest-text report.pdf 1-3   # pages 1-3 only
-
-# Screenshot pages for visual inspection
-ingest-screenshot report.pdf 1-5
-
-# Quick doc info (page count, format, size)
-ingest-info report.pdf
-
-# Batch parse an entire directory of documents
-ingest-batch ./invoices/
-
-# ★★★ Raw lit commands (for fine control) ★★★
-
-# Parse to JSON (default: entire document)
+# The workhorse: parse to JSON (stdout)
 lit parse document.pdf --format json -q
 
-# Parse to JSON, specific pages
+# Write to file instead of stdout
+lit parse document.pdf --format json -q -o result.json
+
+# Parse specific pages only
 lit parse document.pdf --format json -q --target-pages "1-5,10"
 
-# Parse to plain text
-lit parse document.pdf --format text -q
-
-# Parse with higher DPI for better OCR
-lit parse document.pdf --format json -q --dpi 300
-
-# Parse with external OCR server
-lit parse document.pdf --format json -q --ocr-server-url http://localhost:8828/ocr
-
-# Password-protected PDF
-lit parse document.pdf --format json -q --password "s3cret"
-
-# Disable OCR (faster for text-only PDFs)
+# Disable OCR for pure-text PDFs (faster)
 lit parse document.pdf --format json -q --no-ocr
 
-# Use custom config file
-lit parse document.pdf --format json -q --config ./liteparse.config.json
+# Higher DPI for better OCR accuracy
+lit parse document.pdf --format json -q --dpi 300
+
+# Use external OCR server (EasyOCR/PaddleOCR)
+lit parse document.pdf --format json -q --ocr-server-url http://localhost:8828/ocr
+
+# Password-protected PDFs
+lit parse secure.pdf --format json -q --password "s3cret"
+
+# Read from stdin (piped or remote)
+cat document.pdf | lit parse - --format json -q
+curl -sL https://example.com/report.pdf | lit parse - --format json -q
 
 # Screenshots
 lit screenshot document.pdf -o ./screenshots
-lit screenshot document.pdf --target-pages "1-5" --dpi 300 --format png -o ./screenshots
-lit screenshot document.pdf --target-pages "1-5" --password "s3cret" -o ./screenshots
+lit screenshot document.pdf --target-pages "1-5" --dpi 300 -o ./screenshots
 
-# Batch parse
+# Batch: parse entire directory
 lit batch-parse ./input-dir ./output-dir --recursive --format json -q
-lit batch-parse ./input-dir ./output-dir --extension .pdf --format json -q
 ```
-
-## Wrapper scripts
-
-Convenience scripts live alongside the skill (also available at `INGEST_BIN` if copied to PATH):
-
-| Script | Purpose | Syntax |
-|--------|---------|--------|
-| `ingest-parse` | Parse doc → JSON (structured text with positions) | `ingest-parse <file> [pages]` |
-| `ingest-text` | Parse doc → plain text only (faster) | `ingest-text <file> [pages]` |
-| `ingest-screenshot` | Screenshot pages → PNG images | `ingest-screenshot <file> [pages]` |
-| `ingest-batch` | Parse all docs in a directory | `ingest-batch <input-dir> [output-dir]` |
-| `ingest-info` | Quick doc summary (pages, format, size) | `ingest-info <file>` |
-
-All scripts:
-- Output to stdout by default (agent reads it directly)
-- Accept an optional page range as the second argument
-- Use `-q` internally (quiet mode)
 
 ## Output: JSON structure
 
@@ -126,7 +90,8 @@ When parsing with `--format json`, the result looks like:
         "x": 72, "y": 200,
         "width": 150, "height": 12,
         "fontName": "Helvetica",
-        "fontSize": 10
+        "fontSize": 10,
+        "confidence": 1.0
       }
     ],
     "boundingBoxes": [
@@ -139,10 +104,9 @@ When parsing with `--format json`, the result looks like:
 - `text` — full page text with spatial layout (newlines, indentation preserved)
 - `textItems[].text` — individual text fragment
 - `textItems[].x/y/width/height` — position in PDF points (72 points = 1 inch, origin top-left)
+- `textItems[].confidence` — 1.0 for native PDF text, <1.0 for OCR text
 - `textItems[].fontName` — e.g. "Helvetica", "Times-Roman", "OCR" (OCR-detected text)
-- `textItems[].fontSize` — font size in PDF points
-- `boundingBoxes` — axis-aligned boxes `{x1,y1,x2,y2}` for each text line
-- Screenshot pixel coords: `pixel = pdf_point × dpi / 72`
+- `boundingBoxes` — deprecated alias, use `textItems` coordinates directly
 
 ## OCR: when it triggers
 
@@ -161,12 +125,23 @@ Screenshots are rendered at the configured DPI (default 150) via PDFium for high
 
 When the user asks "where does it say X" or "show me the chart on page 3" or "highlight the revenue number":
 1. Parse with `--format json` to get bounding box coordinates
-2. Screenshot the relevant pages via `ingest-screenshot`
-3. Coordinates × DPI/72 = pixel positions
+2. Screenshot the relevant pages
+3. Use `ingest-cite` to overlay highlights (coordinates × DPI/72 = pixels)
+
+## Wrapper scripts
+
+Use these from `~/storage/code/liteparse-ingest/bin/` for multi-step workflows:
+
+| Script | Purpose |
+|--------|---------|
+| `ingest-parse <file>` | Parse to JSON, validate, print summary stats |
+| `ingest-batch <in-dir> <out-dir>` | Batch parse directory recursively |
+| `ingest-cite <file> <phrase>` | Visual citation: parse + find + screenshot + highlight |
+| `ingest-url <url>` | Fetch remote PDF and parse in one step |
 
 ## Configuration
 
-Create a `liteparse.config.json` anywhere for custom defaults:
+Default config at `~/storage/code/liteparse-ingest/config/liteparse.config.json`:
 
 ```json
 {
@@ -180,28 +155,7 @@ Create a `liteparse.config.json` anywhere for custom defaults:
 }
 ```
 
-Apply with: `lit parse file.pdf --config liteparse.config.json -q`
-
-## Available CLI flags (all lit commands)
-
-| Flag | Commands | Description |
-|------|----------|-------------|
-| `--format <json\|text>` | parse, batch-parse | Output format (default: text) |
-| `--target-pages <pages>` | parse, screenshot | Page range e.g. `"1-5,10"` |
-| `-q / --quiet` | all | Suppress progress output |
-| `-o / --output <file>` | parse | Write to file instead of stdout |
-| `--no-ocr` | parse, batch-parse | Disable OCR |
-| `--ocr-language <lang>` | parse, batch-parse | Language code for OCR |
-| `--ocr-server-url <url>` | parse, batch-parse | External OCR server |
-| `--dpi <n>` | all | Render DPI (default: 150) |
-| `--max-pages <n>` | parse, batch-parse | Max pages to process (CLI default: 10000) |
-| `--password <pw>` | parse, screenshot, batch-parse | Password for encrypted docs |
-| `--num-workers <n>` | parse, batch-parse | Parallel OCR workers (default: CPU-1) |
-| `--no-precise-bbox` | parse, batch-parse | Skip bounding box calculation |
-| `--preserve-small-text` | parse, batch-parse | Keep very small text |
-| `--recursive` | batch-parse | Recurse into subdirectories |
-| `--extension <ext>` | batch-parse | Filter by extension (e.g. `.pdf`) |
-| `--config <file>` | all | Load options from JSON file |
+Apply config with: `lit parse file.pdf --config ~/storage/code/liteparse-ingest/config/liteparse.config.json -q`
 
 ## Error guide
 
@@ -218,8 +172,7 @@ Apply with: `lit parse file.pdf --config liteparse.config.json -q`
 
 - Always use `-q` (quiet) flag — progress output goes to stderr and clutters agent context
 - Prefer `--format json` — gives structured data the agent can reason about programmatically
-- Never use `--target-pages` unless the user explicitly asks for specific pages (or you know which pages you need)
-- `--max-pages` defaults to 10000 in the CLI; the skill defaults to 1000 (config default)
-- **CLI does NOT support stdin/pipe** — `cat file.pdf | lit parse -` will fail. Always pass a file path
-- For remote URLs, download first: `curl -sLO url && ingest-parse <file>`
+- Never use `--target-pages` unless the user explicitly asks for specific pages
+- `--max-pages` defaults to 10000 in the CLI; the agent should default to 1000 via config
+- If `lit` is not found, it's installed globally at `/data/data/com.termux/files/usr/bin/lit`
 - On Android/Termux: LibreOffice and ImageMagick may not be available — warn the user if they try to parse DOCX/XLSX/images, and suggest converting to PDF first
